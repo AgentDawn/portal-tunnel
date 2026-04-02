@@ -26,11 +26,11 @@ import (
 )
 
 var (
-	errFeatureUnavailable  = errors.New(types.APIErrorCodeFeatureUnavailable)
-	errHostnameConflict    = errors.New(types.APIErrorCodeHostnameConflict)
-	errIPBanned            = errors.New(types.APIErrorCodeIPBanned)
-	errLeaseNotFound       = errors.New(types.APIErrorCodeLeaseNotFound)
-	errLeaseRejected       = errors.New(types.APIErrorCodeLeaseRejected)
+	errFeatureUnavailable      = errors.New(types.APIErrorCodeFeatureUnavailable)
+	errHostnameConflict        = errors.New(types.APIErrorCodeHostnameConflict)
+	errIPBanned                = errors.New(types.APIErrorCodeIPBanned)
+	errLeaseNotFound           = errors.New(types.APIErrorCodeLeaseNotFound)
+	errLeaseRejected           = errors.New(types.APIErrorCodeLeaseRejected)
 	errTransportMismatch       = errors.New(types.APIErrorCodeTransportMismatch)
 	errUnauthorized            = errors.New(types.APIErrorCodeUnauthorized)
 	errUDPDisabled             = errors.New(types.APIErrorCodeUDPDisabled)
