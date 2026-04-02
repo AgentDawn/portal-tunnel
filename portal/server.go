@@ -35,6 +35,7 @@ const (
 	defaultClientHelloWait    = 2 * time.Second
 	defaultControlBodyLimit   = 4 << 20
 	defaultUDPPortBase        = 50000
+	defaultTCPPortBase        = 40000
 	defaultWGRecoveryFailures = 3
 )
 
@@ -58,6 +59,7 @@ type ServerConfig struct {
 	TrustProxyHeaders   bool
 	DiscoveryEnabled    bool
 	UDPPortCount        int
+	TCPPortCount        int
 }
 
 type Server struct {
@@ -72,6 +74,7 @@ type Server struct {
 	group             *errgroup.Group
 	registry          *leaseRegistry
 	ports             *transport.PortAllocator
+	tcpPorts          *transport.PortAllocator
 	identity          types.Identity
 	wgConfig          wireguard.Config
 	cfg               ServerConfig
@@ -143,15 +146,24 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 			Msg("generated relay identity and saved it to disk")
 	}
 
+	tcpPortMin, tcpPortMax := 0, 0
+	if cfg.TCPPortCount > 0 {
+		tcpPortMin = defaultTCPPortBase
+		tcpPortMax = defaultTCPPortBase + cfg.TCPPortCount - 1
+	}
+
 	policy := policy.NewRuntime()
 	policy.SetUDPPolicy(cfg.UDPPortCount > 0, 0)
+	policy.SetTCPPortPolicy(cfg.TCPPortCount > 0, 0)
 	registry := newLeaseRegistry(policy)
 	ports := transport.NewPortAllocator(portMin, portMax, 5*time.Minute)
+	tcpPorts := transport.NewPortAllocator(tcpPortMin, tcpPortMax, 5*time.Minute)
 
 	s := &Server{
 		cfg:               cfg,
 		registry:          registry,
 		ports:             ports,
+		tcpPorts:          tcpPorts,
 		identity:          identity,
 		wgConfig:          wgConfig,
 		trustedProxyCIDRs: trustedProxyCIDRs,

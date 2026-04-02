@@ -31,10 +31,12 @@ var (
 	errIPBanned            = errors.New(types.APIErrorCodeIPBanned)
 	errLeaseNotFound       = errors.New(types.APIErrorCodeLeaseNotFound)
 	errLeaseRejected       = errors.New(types.APIErrorCodeLeaseRejected)
-	errTransportMismatch   = errors.New(types.APIErrorCodeTransportMismatch)
-	errUnauthorized        = errors.New(types.APIErrorCodeUnauthorized)
-	errUDPDisabled         = errors.New(types.APIErrorCodeUDPDisabled)
-	errUDPCapacityExceeded = errors.New(types.APIErrorCodeUDPCapacityExceeded)
+	errTransportMismatch       = errors.New(types.APIErrorCodeTransportMismatch)
+	errUnauthorized            = errors.New(types.APIErrorCodeUnauthorized)
+	errUDPDisabled             = errors.New(types.APIErrorCodeUDPDisabled)
+	errUDPCapacityExceeded     = errors.New(types.APIErrorCodeUDPCapacityExceeded)
+	errTCPPortDisabled         = errors.New(types.APIErrorCodeTCPPortDisabled)
+	errTCPPortCapacityExceeded = errors.New(types.APIErrorCodeTCPPortCapacityExceeded)
 )
 
 func (s *Server) newAPIServer(listener net.Listener, apiMux *http.ServeMux, apiTLS keyless.TLSMaterialConfig) (net.Listener, *http.Server, io.Closer, error) {
@@ -556,6 +558,17 @@ func (s *Server) registerLease(req types.RegisterChallengeRequest, clientIP, rep
 			return types.RegisterResponse{}, errUDPCapacityExceeded
 		}
 	}
+	if req.TCPPortEnabled {
+		if s.cfg.TCPPortCount <= 0 {
+			return types.RegisterResponse{}, errFeatureUnavailable
+		}
+		if !s.registry.policy.IsTCPPortEnabled() {
+			return types.RegisterResponse{}, errTCPPortDisabled
+		}
+		if max := s.registry.policy.TCPPortMaxLeases(); max > 0 && s.registry.CountTCPPortLeases() >= max {
+			return types.RegisterResponse{}, errTCPPortCapacityExceeded
+		}
+	}
 	accessToken, claims, err := auth.IssueLeaseAccessToken(s.identity.PrivateKey, s.identity.Address, s.cfg.PortalURL, identity, ttl)
 	if err != nil {
 		return types.RegisterResponse{}, err
@@ -563,17 +576,19 @@ func (s *Server) registerLease(req types.RegisterChallengeRequest, clientIP, rep
 	issuedAt := claims.IssuedAt.Time().UTC()
 	expiresAt := claims.Expiry.Time().UTC()
 	identityKey := identity.Key()
+	stream := transport.NewRelayStream(identityKey, defaultIdleKeepalive, defaultReadyQueueLimit)
 	record := &leaseRecord{
-		Identity:    identity,
-		Hostname:    hostname,
-		Metadata:    req.Metadata.Copy(),
-		ExpiresAt:   expiresAt,
-		FirstSeenAt: issuedAt,
-		LastSeenAt:  issuedAt,
-		ClientIP:    clientIP,
-		ReportedIP:  utils.SanitizeReportedIP(reportedIP),
-		UDPEnabled:  req.UDPEnabled,
-		stream:      transport.NewRelayStream(identityKey, defaultIdleKeepalive, defaultReadyQueueLimit),
+		Identity:       identity,
+		Hostname:       hostname,
+		Metadata:       req.Metadata.Copy(),
+		ExpiresAt:      expiresAt,
+		FirstSeenAt:    issuedAt,
+		LastSeenAt:     issuedAt,
+		ClientIP:       clientIP,
+		ReportedIP:     utils.SanitizeReportedIP(reportedIP),
+		UDPEnabled:     req.UDPEnabled,
+		TCPPortEnabled: req.TCPPortEnabled,
+		stream:         stream,
 	}
 	if req.UDPEnabled {
 		if s.ports == nil {
@@ -585,6 +600,17 @@ func (s *Server) registerLease(req types.RegisterChallengeRequest, clientIP, rep
 		}
 		record.datagram = transport.NewRelayDatagram(identityKey, port)
 		record.ports = s.ports
+	}
+	if req.TCPPortEnabled {
+		if s.tcpPorts == nil {
+			return types.RegisterResponse{}, errors.New("tcp port allocation not available")
+		}
+		port, err := s.tcpPorts.Allocate(identity.Name)
+		if err != nil {
+			return types.RegisterResponse{}, err
+		}
+		record.tcpPort = transport.NewRelayTCPPort(identityKey, port, stream)
+		record.tcpPorts = s.tcpPorts
 	}
 
 	if err := record.Start(); err != nil {

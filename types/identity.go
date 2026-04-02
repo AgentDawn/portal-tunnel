@@ -51,14 +51,16 @@ func (m LeaseMetadata) Copy() LeaseMetadata {
 }
 
 type Lease struct {
-	Name        string `json:"name,omitempty"`
-	ExpiresAt   time.Time
-	FirstSeenAt time.Time
-	LastSeenAt  time.Time
-	Hostname    string
-	UDPEnabled  bool
-	Metadata    LeaseMetadata
-	Ready       int
+	Name           string `json:"name,omitempty"`
+	ExpiresAt      time.Time
+	FirstSeenAt    time.Time
+	LastSeenAt     time.Time
+	Hostname       string
+	UDPEnabled     bool
+	TCPPortEnabled bool
+	TCPPortAddr    string
+	Metadata       LeaseMetadata
+	Ready          int
 }
 
 type AdminLease struct {
@@ -92,6 +94,7 @@ type RelayDescriptor struct {
 
 	SupportsTCP         bool `json:"supports_tcp,omitempty"`
 	SupportsUDP         bool `json:"supports_udp,omitempty"`
+	SupportsTCPPort     bool `json:"supports_tcp_port,omitempty"`
 	SupportsOverlayPeer bool `json:"supports_overlay_peer,omitempty"`
 }
 
