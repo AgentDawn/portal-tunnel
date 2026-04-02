@@ -159,6 +159,7 @@ func (s *Server) handleRelayDiscovery(w http.ResponseWriter, r *http.Request) {
 		IngressTLSAddr:      ingressAddr,
 		SupportsTCP:         true,
 		SupportsUDP:         s.cfg.UDPPortCount > 0,
+		SupportsTCPPort:     s.cfg.TCPPortCount > 0,
 		SupportsOverlayPeer: supportsOverlayPeer,
 		WireGuardPublicKey:  s.wgConfig.PublicKey,
 		WireGuardEndpoint:   s.wgConfig.Endpoint,
@@ -236,6 +237,10 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 			utils.WriteAPIError(w, http.StatusForbidden, types.APIErrorCodeUDPDisabled, err.Error())
 		case errors.Is(err, errUDPCapacityExceeded):
 			utils.WriteAPIError(w, http.StatusServiceUnavailable, types.APIErrorCodeUDPCapacityExceeded, err.Error())
+		case errors.Is(err, errTCPPortDisabled):
+			utils.WriteAPIError(w, http.StatusForbidden, types.APIErrorCodeTCPPortDisabled, err.Error())
+		case errors.Is(err, errTCPPortCapacityExceeded):
+			utils.WriteAPIError(w, http.StatusServiceUnavailable, types.APIErrorCodeTCPPortCapacityExceeded, err.Error())
 		default:
 			utils.InvalidRequestError(err).Write(w)
 		}
@@ -274,6 +279,10 @@ func (s *Server) handleRegisterChallenge(w http.ResponseWriter, r *http.Request)
 	}).String()
 
 	if req.UDPEnabled && (s.cfg.UDPPortCount <= 0 || s.group != nil && s.quicTunnel == nil) {
+		utils.WriteAPIError(w, http.StatusServiceUnavailable, types.APIErrorCodeFeatureUnavailable, errFeatureUnavailable.Error())
+		return
+	}
+	if req.TCPPortEnabled && s.cfg.TCPPortCount <= 0 {
 		utils.WriteAPIError(w, http.StatusServiceUnavailable, types.APIErrorCodeFeatureUnavailable, errFeatureUnavailable.Error())
 		return
 	}
@@ -631,14 +640,18 @@ func (s *Server) registerLease(req types.RegisterChallengeRequest, clientIP, rep
 	}
 
 	resp := types.RegisterResponse{
-		Identity:    record.Copy(),
-		Hostname:    hostname,
-		ExpiresAt:   expiresAt,
-		AccessToken: accessToken,
-		UDPEnabled:  record.UDPEnabled,
+		Identity:       record.Copy(),
+		Hostname:       hostname,
+		ExpiresAt:      expiresAt,
+		AccessToken:    accessToken,
+		UDPEnabled:     record.UDPEnabled,
+		TCPPortEnabled: record.TCPPortEnabled,
 	}
 	if record.datagram != nil {
 		resp.UDPAddr = fmt.Sprintf("%s:%d", s.identity.Name, record.datagram.UDPPort())
+	}
+	if record.tcpPort != nil {
+		resp.TCPPortAddr = fmt.Sprintf("%s:%d", s.identity.Name, record.tcpPort.TCPPort())
 	}
 
 	return resp, nil

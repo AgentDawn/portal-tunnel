@@ -264,7 +264,8 @@ func (s *Server) Start(ctx context.Context, apiMux *http.ServeMux) error {
 		Str("acme_dns_provider", s.cfg.ACME.DNSProvider).
 		Bool("discovery_enabled", s.cfg.DiscoveryEnabled).
 		Bool("wireguard_enabled", s.wgConfig.PrivateKey != "").
-		Bool("udp_enabled", s.cfg.UDPPortCount > 0)
+		Bool("udp_enabled", s.cfg.UDPPortCount > 0).
+		Bool("tcp_port_enabled", s.cfg.TCPPortCount > 0)
 	if s.quicTunnel != nil {
 		logEvent = logEvent.Str("internal_quic_tunnel_addr", s.quicTunnel.Addr().String())
 	}
